@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>복셀 빌더 — 자유 건축 3D 게임</title>
+<style>
+  :root{
+    --bg-panel: #14171c;
+    --bg-panel-2: #1c2129;
+    --line: #2a3038;
+    --accent: #e8a33d;
+    --accent-2: #4fd1c5;
+    --text: #f1ede4;
+    --text-muted: #8b93a1;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Noto Sans KR', sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html, body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:#0b0d10; font-family: var(--sans); color: var(--text);
+    -webkit-user-select:none; user-select:none;
+  }
+  canvas{ display:block; }
+
+  /* ---------- Start screen ---------- */
+  #start-screen{
+    position:fixed; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1200px 600px at 50% 20%, rgba(232,163,61,0.08), transparent 60%),
+      linear-gradient(180deg, #0b0d10 0%, #10141a 100%);
+  }
+  #start-card{
+    width:min(560px, 92vw);
+    max-height:92vh;
+    overflow-y:auto;
+    background: var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:36px 34px 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+  #start-card .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    color: var(--accent-2); text-transform:uppercase; margin-bottom:10px;
+  }
+  #start-card h1{
+    margin:0 0 6px; font-size:28px; font-weight:800; letter-spacing:-0.01em;
+  }
+  #start-card p.sub{ margin:0 0 22px; color:var(--text-muted); font-size:14px; line-height:1.6; }
+  .help-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px 22px;
+    font-family:var(--mono); font-size:12.5px; color:var(--text-muted);
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    padding:16px 0; margin-bottom:22px;
+  }
+  .help-grid .key{ color: var(--text); }
+  .help-grid kbd{
+    display:inline-block; min-width:20px; text-align:center;
+    background: var(--bg-panel-2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:4px; padding:1px 6px; font-family:var(--mono); font-size:11px; color:var(--text);
+  }
+  #play-btn{
+    width:100%; padding:14px; font-size:15px; font-weight:700;
+    background: var(--accent); color:#1a1305; border:none; border-radius:7px;
+    cursor:pointer; letter-spacing:0.01em;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  #play-btn:hover{ filter:brightness(1.08); transform: translateY(-1px); }
+  #play-btn:active{ transform: translateY(0); }
+  #reset-link{
+    display:block; text-align:center; margin-top:14px; font-family:var(--mono);
+    font-size:11.5px; color: var(--text-muted); cursor:pointer; text-decoration:none;
+  }
+  #reset-link:hover{ color: var(--accent-2); }
+
+  .model-import{ margin-bottom:16px; }
+  .model-import input[type="file"]{
+    position:absolute; width:1px; height:1px; overflow:hidden; opacity:0;
+  }
+  .btn-secondary{
+    display:block; width:100%; text-align:center; padding:11px;
+    background: var(--bg-panel-2); border:1px solid var(--line); border-radius:7px;
+    color: var(--text); font-size:13px; font-weight:600; cursor:pointer;
+    transition: border-color .12s ease, color .12s ease;
+  }
+  .btn-secondary:hover{ border-color: var(--accent-2); color: var(--accent-2); }
+  .model-file-name{
+    margin-top:8px; text-align:center; font-family:var(--mono); font-size:11px;
+    color: var(--text-muted);
+  }
+  #paused-overlay .box .model-import{ margin-top:18px; margin-bottom:0; }
+  #paused-overlay p.sub2{ margin:0 0 4px; color:var(--text-muted); font-size:13px; }
+  #reset-model-link{
+    display:block; text-align:center; margin-top:10px; font-family:var(--mono);
+    font-size:11px; color: var(--text-muted); cursor:pointer; text-decoration:none;
+  }
+  #reset-model-link:hover{ color: var(--accent-2); }
+
+  /* ---------- HUD ---------- */
+  #hud{ position:fixed; inset:0; z-index:20; pointer-events:none; display:none; }
+  #crosshair{
+    position:absolute; top:50%; left:50%; width:18px; height:18px;
+    transform:translate(-50%,-50%);
+  }
+  #crosshair::before, #crosshair::after{
+    content:""; position:absolute; background: rgba(241,237,228,0.85);
+  }
+  #crosshair::before{ left:50%; top:0; width:2px; height:100%; transform:translateX(-50%); }
+  #crosshair::after{ top:50%; left:0; height:2px; width:100%; transform:translateY(-50%); }
+
+  #coord-hud{
+    position:absolute; top:16px; left:16px;
+    font-family:var(--mono); font-size:11.5px; color: var(--text-muted);
+    background: rgba(20,23,28,0.6); border:1px solid var(--line);
+    padding:8px 12px; border-radius:6px; line-height:1.7;
+  }
+  #coord-hud b{ color: var(--text); font-weight:600; }
+
+  #mode-hint{
+    position:absolute; top:16px; right:16px; text-align:right;
+    font-family:var(--mono); font-size:11px; color: var(--text-muted);
+    background: rgba(20,23,28,0.6); border:1px solid var(--line);
+    padding:8px 12px; border-radius:6px; line-height:1.8;
+  }
+
+  #mode-toggle-btn{
+    position:absolute; top:82px; right:16px; pointer-events:auto;
+    font-family:var(--mono); font-size:11px; color: var(--text);
+    background: rgba(20,23,28,0.65); border:1px solid var(--line);
+    padding:7px 12px; border-radius:6px; cursor:pointer;
+  }
+  #mode-toggle-btn:hover{ border-color: var(--accent-2); color: var(--accent-2); }
+
+  #hotbar{
+    position:absolute; bottom:22px; left:50%; transform:translateX(-50%);
+    display:flex; gap:6px; pointer-events:auto;
+    background: rgba(20,23,28,0.65); border:1px solid var(--line);
+    padding:6px; border-radius:10px;
+  }
+  .slot{
+    width:52px; height:52px; border-radius:6px; position:relative;
+    border:1px solid var(--line); cursor:pointer;
+    display:flex; align-items:flex-end; justify-content:flex-start;
+    background: var(--bg-panel-2);
+  }
+  .slot .swatch{ position:absolute; inset:6px; border-radius:4px; }
+  .slot .num{
+    position:relative; margin:2px; font-family:var(--mono); font-size:9.5px;
+    color: rgba(0,0,0,0.55); background:rgba(255,255,255,0.55);
+    padding:0 3px; border-radius:3px; z-index:2;
+  }
+  .slot.active{ border-color: var(--accent); box-shadow: 0 0 0 2px rgba(232,163,61,0.35); }
+
+  #paused-overlay{
+    position:fixed; inset:0; z-index:40; display:none;
+    align-items:center; justify-content:center;
+    background: rgba(11,13,16,0.72);
+  }
+  #paused-overlay .box{
+    background: var(--bg-panel); border:1px solid var(--line); border-radius:10px;
+    padding:26px 30px; text-align:center;
+  }
+  #paused-overlay h2{ margin:0 0 8px; font-size:18px; }
+  #paused-overlay p{ margin:0; color:var(--text-muted); font-size:13px; }
+
+  #block-name-toast{
+    position:absolute; bottom:88px; left:50%; transform:translateX(-50%);
+    font-family:var(--mono); font-size:12px; color: var(--text);
+    background: rgba(20,23,28,0.7); border:1px solid var(--line);
+    padding:4px 10px; border-radius:5px; opacity:0; transition:opacity .25s ease;
+  }
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <div id="start-card">
+    <div class="eyebrow">VOXEL BUILDER · 자유 건축 샌드박스</div>
+    <h1>복셀 빌더</h1>
+    <p class="sub">브라우저에서 바로 실행되는 3D 블록 건축 게임입니다. 블록을 부수고, 원하는 위치에 쌓아 자유롭게 무엇이든 만들어보세요. 만든 세계는 자동으로 저장됩니다.</p>
+    <div class="help-grid">
+      <div><span class="key"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> 이동</div>
+      <div><span class="key"><kbd>Space</kbd></span> 점프 · 비행 중 상승</div>
+      <div><span class="key"><kbd>Shift</kbd></span> 달리기</div>
+      <div><span class="key">마우스</span> 카메라 회전</div>
+      <div><span class="key">좌클릭</span> 블록 부수기</div>
+      <div><span class="key">우클릭</span> 블록 설치</div>
+      <div><span class="key">휠</span> 카메라 줌 (3인칭)</div>
+      <div><span class="key"><kbd>1</kbd>–<kbd>9</kbd></span> 블록 선택</div>
+      <div><span class="key"><kbd>V</kbd></span> 1인칭 / 3인칭 전환</div>
+      <div><span class="key"><kbd>F</kbd></span> 비행 모드 켜기/끄기</div>
+      <div><span class="key"><kbd>C</kbd></span> 비행 중 하강</div>
+      <div><span class="key"><kbd>Ctrl</kbd>+<kbd>Z</kbd></span> 실행 취소</div>
+    </div>
+    <div class="model-import">
+      <label for="model-file" class="btn-secondary">3D 캐릭터 모델 불러오기 (.glb / .gltf)</label>
+      <input type="file" id="model-file" accept=".glb,.gltf">
+      <div id="model-file-name" class="model-file-name">기본 캐릭터 사용 중 · 모델을 불러오면 자동으로 교체됩니다</div>
+    </div>
+    <button id="play-btn">클릭하여 플레이 시작</button>
+    <a id="reset-link">저장된 세계 초기화하고 새로 시작하기</a>
+  </div>
+</div>
+
+<div id="paused-overlay">
+  <div class="box">
+    <h2>일시정지됨</h2>
+    <p class="sub2">화면을 클릭하면 다시 시작합니다</p>
+    <div class="model-import">
+      <label for="model-file-2" class="btn-secondary">3D 캐릭터 모델 불러오기</label>
+      <input type="file" id="model-file-2" accept=".glb,.gltf">
+      <a id="reset-model-link">기본 캐릭터로 되돌리기</a>
+    </div>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="coord-hud">
+    위치 <b id="coord-xyz">0, 0, 0</b><br>
+    블록 수 <b id="block-count">0</b>
+  </div>
+  <div id="mode-hint">
+    좌클릭: 부수기 · 우클릭: 설치<br>
+    1–9: 블록 변경 · V: 시점 전환<br>
+    F: 비행 모드 · Ctrl+Z: 실행 취소
+  </div>
+  <button id="mode-toggle-btn">1인칭으로 전환 (V)</button>
+  <div id="block-name-toast"></div>
+  <div id="hotbar"></div>
+</div>
+
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // Block palette
+  // ---------------------------------------------------------------
+  const BLOCK_TYPES = [
+    { id:"grass",  name:"잔디",   color:0x5aa03e },
+    { id:"dirt",   name:"흙",     color:0x8b5a2b },
+    { id:"stone",  name:"돌",     color:0x8a8f96 },
+    { id:"wood",   name:"나무",   color:0x8b6b3d },
+    { id:"sand",   name:"모래",   color:0xe0c88a },
+    { id:"brick",  name:"벽돌",   color:0xb23b3b },
+    { id:"snow",   name:"눈",     color:0xf3f6f8 },
+    { id:"gold",   name:"금",     color:0xd4af37 },
+    { id:"glass",  name:"유리",   color:0x8fd3e8, opacity:0.45 },
+  ];
+
+  const STORAGE_KEY = "voxelBuilderWorld_v1";
+
+  // ---------------------------------------------------------------
+  // Renderer / scene / camera
+  // ---------------------------------------------------------------
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9fd4f0);
+  scene.fog = new THREE.Fog(0x9fd4f0, 40, 140);
+
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  window.addEventListener("resize", ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Lighting
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x555b66, 0.9);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(60, 90, 40);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -45;
+  sun.shadow.camera.right = 45;
+  sun.shadow.camera.top = 45;
+  sun.shadow.camera.bottom = -45;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 260;
+  sun.shadow.bias = -0.0015;
+  sun.shadow.camera.updateProjectionMatrix();
+  scene.add(sun);
+  scene.add(sun.target);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.25);
+  scene.add(ambient);
+
+  // ---------------------------------------------------------------
+  // Day / night cycle — the sun orbits slowly, sky + light fade between
+  // day, sunset and night. Purely cosmetic, runs continuously.
+  // ---------------------------------------------------------------
+  const DAY_LENGTH = 300; // seconds for a full day/night cycle
+  let timeOfDay = 0.28;   // 0..1, starts mid-morning
+  const SUN_RADIUS = 140;
+  const skyDay = new THREE.Color(0x9fd4f0);
+  const skySunset = new THREE.Color(0xf4966a);
+  const skyNight = new THREE.Color(0x0a0e1c);
+  const starsGeo = new THREE.BufferGeometry();
+  const STAR_COUNT = 500;
+  const starPositions = new Float32Array(STAR_COUNT*3);
+  for(let i=0;i<STAR_COUNT;i++){
+    const r = 260;
+    const theta = Math.random()*Math.PI*2;
+    const phi = Math.acos(Math.random()*0.85); // keep stars in the upper hemisphere
+    starPositions[i*3]   = r*Math.sin(phi)*Math.cos(theta);
+    starPositions[i*3+1] = r*Math.cos(phi) + 20;
+    starPositions[i*3+2] = r*Math.sin(phi)*Math.sin(theta);
+  }
+  starsGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+  const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ color:0xffffff, size:1.4, transparent:true, opacity:0 }));
+  scene.add(stars);
+
+  const tmpSkyColor = new THREE.Color();
+  function updateDayNight(dt){
+    timeOfDay = (timeOfDay + dt/DAY_LENGTH) % 1;
+    const sunAngle = timeOfDay * Math.PI * 2;
+    const height = Math.sin(sunAngle); // -1 (midnight) .. 1 (noon)
+
+    sun.position.set(Math.cos(sunAngle)*SUN_RADIUS, Math.max(height,-0.15)*SUN_RADIUS + 20, 40);
+    sun.target.position.set(playerPos.x, playerPos.y, playerPos.z);
+
+    const dayFactor = (height + 1) / 2; // 0..1
+    if(dayFactor < 0.5){
+      tmpSkyColor.copy(skyNight).lerp(skySunset, dayFactor/0.5);
+    } else {
+      tmpSkyColor.copy(skySunset).lerp(skyDay, (dayFactor-0.5)/0.5);
+    }
+    scene.background.copy(tmpSkyColor);
+    scene.fog.color.copy(tmpSkyColor);
+
+    sun.intensity = Math.max(0.05, height) * 0.95;
+    hemi.intensity = 0.35 + Math.max(0, height) * 0.55;
+    ambient.intensity = 0.22 + (1-Math.max(0,dayFactor)) * 0.18;
+
+    stars.material.opacity = Math.max(0, 0.05 - height) * 4; // fade in well after sunset
+  }
+
+  // ---------------------------------------------------------------
+  // Player: feet position (Vector3) + separate orbiting 3rd-person camera
+  // ---------------------------------------------------------------
+  const EYE_HEIGHT = 1.4;              // 3rd-person camera look-at target height above feet
+  const FP_EYE_HEIGHT = 1.55;          // 1st-person eye height above feet
+  const playerPos = new THREE.Vector3(0.5, 3, 0.5);
+  let characterYaw = 0;                // smoothed facing direction of the character model
+  let cameraYaw = 0;                   // mouse-controlled camera yaw (shared by both view modes)
+  let pitch = 0.35;                    // mouse-controlled look pitch; positive = looking up
+  let camDistance = 6;                 // 3rd-person zoom distance
+  let viewMode = "third";              // "third" or "first"
+  let flying = false;                  // creative-style free flight toggle (F)
+  scene.add(camera);
+
+  // Character rig: characterGroup follows playerPos/characterYaw every frame.
+  // characterModelRoot holds either the default blocky avatar or an imported GLTF model.
+  const characterGroup = new THREE.Group();
+  scene.add(characterGroup);
+  const characterModelRoot = new THREE.Group();
+  characterGroup.add(characterModelRoot);
+
+  let usingCustomModel = false;
+  let mixer = null;
+  let walkAction = null, idleAction = null, currentAction = null;
+  let walkPhase = 0;
+  let defaultParts = null; // { leftLeg, rightLeg, leftArm, rightArm }
+
+  function clearCharacterModelRoot(){
+    while(characterModelRoot.children.length){
+      const obj = characterModelRoot.children[0];
+      characterModelRoot.remove(obj);
+    }
+    mixer = null; walkAction = null; idleAction = null; currentAction = null;
+    defaultParts = null;
+  }
+
+  function buildDefaultCharacter(){
+    clearCharacterModelRoot();
+    usingCustomModel = false;
+    const skin = new THREE.MeshLambertMaterial({ color: 0xf0c090 });
+    const shirt = new THREE.MeshLambertMaterial({ color: 0x4fd1c5 });
+    const pants = new THREE.MeshLambertMaterial({ color: 0x2a3038 });
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), skin);
+    head.position.set(0, 1.4, 0);
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.6,0.3), shirt);
+    torso.position.set(0, 0.9, 0);
+
+    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.6,0.18), shirt);
+    leftArm.position.set(0.34, 0.9, 0);
+    leftArm.geometry.translate(0,-0.3,0);
+    leftArm.position.y = 1.2;
+
+    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.6,0.18), shirt);
+    rightArm.position.set(-0.34, 1.2, 0);
+    rightArm.geometry.translate(0,-0.3,0);
+
+    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.6,0.2), pants);
+    leftLeg.geometry.translate(0,-0.3,0);
+    leftLeg.position.set(0.12, 0.6, 0);
+
+    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.6,0.2), pants);
+    rightLeg.geometry.translate(0,-0.3,0);
+    rightLeg.position.set(-0.12, 0.6, 0);
+
+    [head, torso, leftArm, rightArm, leftLeg, rightLeg].forEach(m=>{
+      m.castShadow = true;
+      characterModelRoot.add(m);
+    });
+    defaultParts = { leftLeg, rightLeg, leftArm, rightArm };
+  }
+
+  buildDefaultCharacter();
+
+  function loadCharacterModel(arrayBuffer, onDone){
+    const loader = new THREE.GLTFLoader();
+    loader.parse(arrayBuffer, '', (gltf)=>{
+      clearCharacterModelRoot();
+      usingCustomModel = true;
+      const model = gltf.scene || gltf.scenes[0];
+
+      const box1 = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box1.getSize(size);
+      const desiredHeight = 1.7;
+      const scale = size.y > 0.0001 ? desiredHeight / size.y : 1;
+      model.scale.setScalar(scale);
+
+      const box2 = new THREE.Box3().setFromObject(model);
+      model.position.x -= (box2.min.x + box2.max.x) / 2;
+      model.position.z -= (box2.min.z + box2.max.z) / 2;
+      model.position.y -= box2.min.y;
+
+      characterModelRoot.add(model);
+      model.traverse(obj=>{ if(obj.isMesh){ obj.castShadow = true; obj.receiveShadow = false; } });
+
+      if(gltf.animations && gltf.animations.length){
+        mixer = new THREE.AnimationMixer(model);
+        const clips = gltf.animations;
+        const walkClip = clips.find(c=>/walk|run|move/i.test(c.name)) || clips[0];
+        const idleClip = clips.find(c=>/idle|stand/i.test(c.name)) || clips[0];
+        walkAction = mixer.clipAction(walkClip);
+        idleAction = mixer.clipAction(idleClip);
+        idleAction.reset().play();
+        currentAction = idleAction;
+      }
+      if(onDone) onDone(true);
+    }, (err)=>{
+      console.error(err);
+      if(onDone) onDone(false, err);
+    });
+  }
+
+  function playAction(action){
+    if(!action || currentAction === action) return;
+    const prev = currentAction;
+    action.reset().fadeIn(0.2).play();
+    if(prev) prev.fadeOut(0.2);
+    currentAction = action;
+  }
+
+  // ---------------------------------------------------------------
+  // Block world storage
+  // ---------------------------------------------------------------
+  const blocksGroup = new THREE.Group();
+  scene.add(blocksGroup);
+
+  const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+  // --- Procedural pixel-art textures (no external image files needed) ---
+  const TEX_SIZE = 16;
+
+  function makeCanvas(size){
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    return c;
+  }
+
+  function toTexture(canvas){
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function speckle(ctx, size, base, dots, count){
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+    for(let i=0;i<count;i++){
+      ctx.fillStyle = dots[Math.floor(Math.random()*dots.length)];
+      ctx.fillRect(Math.floor(Math.random()*size), Math.floor(Math.random()*size), 1, 1);
+    }
+  }
+
+  function drawGrassTop(ctx, s){ speckle(ctx, s, "#5aa03e", ["#4c8f34","#66b046","#3f7a2b"], 42); }
+  function drawDirt(ctx, s){ speckle(ctx, s, "#8b5a2b", ["#7a4d23","#9c6934","#6d431c"], 46); }
+  function drawGrassSide(ctx, s){
+    speckle(ctx, s, "#8b5a2b", ["#7a4d23","#9c6934"], 26);
+    const topH = Math.round(s*0.34);
+    ctx.fillStyle = "#5aa03e";
+    ctx.fillRect(0, 0, s, topH);
+    for(let x=0;x<s;x++){
+      ctx.fillRect(x, topH, 1, Math.floor(Math.random()*3));
+    }
+    for(let i=0;i<14;i++){
+      ctx.fillStyle = Math.random()<0.5 ? "#4c8f34" : "#66b046";
+      ctx.fillRect(Math.floor(Math.random()*s), Math.floor(Math.random()*topH), 1, 1);
+    }
+  }
+  function drawStone(ctx, s){
+    speckle(ctx, s, "#8a8f96", ["#7d8189","#999da3","#6f7379","#adb1b6"], 55);
+    ctx.strokeStyle = "rgba(60,63,68,0.5)";
+    ctx.beginPath(); ctx.moveTo(2,4); ctx.lineTo(6,9); ctx.lineTo(4,14); ctx.stroke();
+  }
+  function drawWood(ctx, s){
+    ctx.fillStyle = "#8b6b3d";
+    ctx.fillRect(0,0,s,s);
+    for(let x=0;x<s;x++){
+      ctx.fillStyle = (x%3===0) ? "#78592f" : (x%3===1 ? "#96763f" : "#8b6b3d");
+      ctx.fillRect(x,0,1,s);
+    }
+    ctx.fillStyle = "rgba(50,35,15,0.55)";
+    ctx.fillRect(0, Math.floor(s*0.33), s, 1);
+    ctx.fillRect(0, Math.floor(s*0.67), s, 1);
+  }
+  function drawSand(ctx, s){ speckle(ctx, s, "#e0c88a", ["#d4b876","#eddaa0","#c9a962"], 36); }
+  function drawBrick(ctx, s){
+    ctx.fillStyle = "#c9beae";
+    ctx.fillRect(0,0,s,s);
+    const rowH = 4, brickW = 8;
+    ctx.fillStyle = "#b23b3b";
+    for(let y=0; y<s; y+=rowH){
+      const offset = ((y/rowH)%2===0) ? 0 : brickW/2;
+      for(let x=-brickW; x<s+brickW; x+=brickW){
+        ctx.fillRect(x+offset, y, brickW-1, rowH-1);
+      }
+    }
+    for(let i=0;i<20;i++){
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.fillRect(Math.floor(Math.random()*s), Math.floor(Math.random()*s), 1, 1);
+    }
+  }
+  function drawSnow(ctx, s){ speckle(ctx, s, "#f3f6f8", ["#e4ecf0","#ffffff","#dce6ea"], 24); }
+  function drawGold(ctx, s){
+    ctx.fillStyle = "#d4af37";
+    ctx.fillRect(0,0,s,s);
+    for(let i=0;i<s;i++){
+      ctx.fillStyle = (i%4===0) ? "#f4d76b" : (i%4===2 ? "#a8842a" : "#d4af37");
+      ctx.fillRect(0,i,s,1);
+    }
+    for(let i=0;i<10;i++){
+      ctx.fillStyle = "#fff6c2";
+      ctx.fillRect(Math.floor(Math.random()*s), Math.floor(Math.random()*s), 1, 1);
+    }
+  }
+  function drawGlass(ctx, s){
+    ctx.clearRect(0,0,s,s);
+    ctx.fillStyle = "rgba(159,212,235,0.32)";
+    ctx.fillRect(0,0,s,s);
+    ctx.fillStyle = "rgba(255,255,255,0.65)";
+    ctx.fillRect(0,0,s,1); ctx.fillRect(0,s-1,s,1);
+    ctx.fillRect(0,0,1,s); ctx.fillRect(s-1,0,1,s);
+    ctx.fillRect(0, Math.floor(s/2), s, 1);
+    ctx.fillRect(Math.floor(s/2), 0, 1, s);
+  }
+
+  function buildTexture(drawFn){
+    const canvas = makeCanvas(TEX_SIZE);
+    drawFn(canvas.getContext("2d"), TEX_SIZE);
+    return toTexture(canvas);
+  }
+
+  const textures = {
+    grassTop: buildTexture(drawGrassTop),
+    grassSide: buildTexture(drawGrassSide),
+    dirt: buildTexture(drawDirt),
+    stone: buildTexture(drawStone),
+    wood: buildTexture(drawWood),
+    sand: buildTexture(drawSand),
+    brick: buildTexture(drawBrick),
+    snow: buildTexture(drawSnow),
+    gold: buildTexture(drawGold),
+    glass: buildTexture(drawGlass),
+  };
+
+  // BoxGeometry face group order is [+x, -x, +y, -y, +z, -z] (right, left, top, bottom, front, back)
+  const materials = {
+    grass: [
+      new THREE.MeshLambertMaterial({ map: textures.grassSide }),
+      new THREE.MeshLambertMaterial({ map: textures.grassSide }),
+      new THREE.MeshLambertMaterial({ map: textures.grassTop }),
+      new THREE.MeshLambertMaterial({ map: textures.dirt }),
+      new THREE.MeshLambertMaterial({ map: textures.grassSide }),
+      new THREE.MeshLambertMaterial({ map: textures.grassSide }),
+    ],
+    dirt:  new THREE.MeshLambertMaterial({ map: textures.dirt }),
+    stone: new THREE.MeshLambertMaterial({ map: textures.stone }),
+    wood:  new THREE.MeshLambertMaterial({ map: textures.wood }),
+    sand:  new THREE.MeshLambertMaterial({ map: textures.sand }),
+    brick: new THREE.MeshLambertMaterial({ map: textures.brick }),
+    snow:  new THREE.MeshLambertMaterial({ map: textures.snow }),
+    gold:  new THREE.MeshLambertMaterial({ map: textures.gold }),
+    glass: new THREE.MeshLambertMaterial({ map: textures.glass, transparent: true, opacity: 0.9 }),
+  };
+
+  const blockData = new Map();   // "x,y,z" -> typeId
+  const blockMesh = new Map();   // "x,y,z" -> THREE.Mesh
+
+  function key(x,y,z){ return x+","+y+","+z; }
+
+  function addBlock(x,y,z,typeId,persist){
+    const k = key(x,y,z);
+    if(blockData.has(k)) return false;
+    const mat = materials[typeId] || materials.stone;
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.set(x+0.5, y+0.5, z+0.5);
+    mesh.userData = { x, y, z, typeId };
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    blocksGroup.add(mesh);
+    blockData.set(k, typeId);
+    blockMesh.set(k, mesh);
+    if(persist) queueSave();
+    updateBlockCount();
+    return true;
+  }
+
+  function removeBlock(x,y,z){
+    const k = key(x,y,z);
+    if(!blockData.has(k)) return false;
+    const mesh = blockMesh.get(k);
+    blocksGroup.remove(mesh);
+    blockData.delete(k);
+    blockMesh.delete(k);
+    queueSave();
+    updateBlockCount();
+    return true;
+  }
+
+  function isSolid(x,y,z){
+    return blockData.has(key(Math.floor(x),Math.floor(y),Math.floor(z)));
+  }
+
+  function updateBlockCount(){
+    document.getElementById("block-count").textContent = blockData.size;
+  }
+
+  let saveTimer = null;
+  function queueSave(){
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>{
+      const obj = {};
+      blockData.forEach((v,k)=>{ obj[k]=v; });
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }catch(e){}
+    }, 400);
+  }
+
+  function generateFlatWorld(){
+    const HALF = 16;
+    for(let x=-HALF; x<HALF; x++){
+      for(let z=-HALF; z<HALF; z++){
+        addBlock(x, 0, z, "grass", false);
+      }
+    }
+    queueSave();
+  }
+
+  function loadWorld(){
+    let saved = null;
+    try{ saved = localStorage.getItem(STORAGE_KEY); }catch(e){}
+    if(saved){
+      try{
+        const obj = JSON.parse(saved);
+        const keys = Object.keys(obj);
+        if(keys.length){
+          keys.forEach(k=>{
+            const [x,y,z] = k.split(",").map(Number);
+            addBlock(x,y,z,obj[k], false);
+          });
+          return;
+        }
+      }catch(e){}
+    }
+    generateFlatWorld();
+  }
+
+  function resetWorld(){
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  }
+
+  loadWorld();
+
+  // ---------------------------------------------------------------
+  // Hotbar UI
+  // ---------------------------------------------------------------
+  let selectedIndex = 0;
+  const hotbarEl = document.getElementById("hotbar");
+  const toastEl = document.getElementById("block-name-toast");
+  let toastTimer = null;
+
+  BLOCK_TYPES.forEach((t, i)=>{
+    const slot = document.createElement("div");
+    slot.className = "slot" + (i===0 ? " active" : "");
+    slot.innerHTML = `<div class="swatch" style="background:#${t.color.toString(16).padStart(6,"0")}"></div><div class="num">${i+1}</div>`;
+    slot.addEventListener("click", ()=> selectSlot(i));
+    hotbarEl.appendChild(slot);
+  });
+
+  function showToast(text){
+    toastEl.textContent = text;
+    toastEl.style.opacity = "1";
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ toastEl.style.opacity = "0"; }, 900);
+  }
+
+  function selectSlot(i){
+    selectedIndex = ((i % BLOCK_TYPES.length) + BLOCK_TYPES.length) % BLOCK_TYPES.length;
+    [...hotbarEl.children].forEach((el,idx)=> el.classList.toggle("active", idx===selectedIndex));
+    showToast(BLOCK_TYPES[selectedIndex].name);
+  }
+
+  // ---------------------------------------------------------------
+  // Pointer lock + look controls
+  // ---------------------------------------------------------------
+  const canvas = renderer.domElement;
+  const startScreen = document.getElementById("start-screen");
+  const pausedOverlay = document.getElementById("paused-overlay");
+  const hud = document.getElementById("hud");
+  const playBtn = document.getElementById("play-btn");
+  const resetLink = document.getElementById("reset-link");
+  const modeToggleBtn = document.getElementById("mode-toggle-btn");
+
+  modeToggleBtn.addEventListener("click", ()=> setViewMode(viewMode === "third" ? "first" : "third"));
+
+  let locked = false;
+  const SENSITIVITY = 0.0022;
+  const PITCH_MIN = -1.2, PITCH_MAX = 1.3;
+
+  function onMouseMove(e){
+    if(!locked) return;
+    cameraYaw -= e.movementX * SENSITIVITY;
+    pitch -= e.movementY * SENSITIVITY;
+    pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch));
+  }
+
+  document.addEventListener("pointerlockchange", ()=>{
+    locked = document.pointerLockElement === canvas;
+    if(locked){
+      hud.style.display = "block";
+      pausedOverlay.style.display = "none";
+      startScreen.style.display = "none";
+    } else {
+      hud.style.display = "none";
+      pausedOverlay.style.display = "flex";
+    }
+  });
+
+  document.addEventListener("mousemove", onMouseMove);
+
+  playBtn.addEventListener("click", ()=>{
+    canvas.requestPointerLock();
+  });
+  pausedOverlay.addEventListener("click", (e)=>{
+    if(e.target.closest(".model-import")) return;
+    canvas.requestPointerLock();
+  });
+  resetLink.addEventListener("click", (e)=>{
+    e.preventDefault();
+    if(confirm("저장된 세계를 초기화할까요? 이 동작은 되돌릴 수 없습니다.")){
+      resetWorld();
+      location.reload();
+    }
+  });
+
+  // ---------------------------------------------------------------
+  // Character model import (works from the start screen or while paused,
+  // since pointer lock is released and normal DOM interaction is available)
+  // ---------------------------------------------------------------
+  const modelFileName = document.getElementById("model-file-name");
+  const resetModelLink = document.getElementById("reset-model-link");
+
+  function handleModelFile(file){
+    if(!file) return;
+    const label = file.name;
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      loadCharacterModel(e.target.result, (ok, err)=>{
+        if(ok){
+          if(modelFileName) modelFileName.textContent = `불러온 모델: ${label}`;
+        } else {
+          alert("모델을 불러오지 못했습니다. .glb 또는 .gltf 파일인지 확인해주세요.");
+          console.error(err);
+        }
+      });
+    };
+    reader.onerror = ()=> alert("파일을 읽는 중 오류가 발생했습니다.");
+    reader.readAsArrayBuffer(file);
+  }
+
+  document.getElementById("model-file").addEventListener("change", (e)=>{
+    handleModelFile(e.target.files[0]);
+  });
+  document.getElementById("model-file-2").addEventListener("change", (e)=>{
+    handleModelFile(e.target.files[0]);
+    if(modelFileName) modelFileName.textContent = `불러온 모델: ${e.target.files[0] ? e.target.files[0].name : ""}`;
+  });
+  resetModelLink.addEventListener("click", (e)=>{
+    e.preventDefault();
+    buildDefaultCharacter();
+    if(modelFileName) modelFileName.textContent = "기본 캐릭터 사용 중 · 모델을 불러오면 자동으로 교체됩니다";
+  });
+
+  // ---------------------------------------------------------------
+  // Keyboard / mouse input
+  // ---------------------------------------------------------------
+  const keys = new Set();
+  document.addEventListener("keydown", (e)=>{
+    keys.add(e.code);
+    const digit = parseInt(e.key, 10);
+    if(!isNaN(digit) && digit>=1 && digit<=9){ selectSlot(digit-1); }
+
+    if(!locked) return;
+    if(e.code === "KeyV"){
+      setViewMode(viewMode === "third" ? "first" : "third");
+    } else if(e.code === "KeyF"){
+      flying = !flying;
+      velocity.y = 0;
+      showToast(flying ? "비행 모드 ON (Space 상승 · C 하강)" : "비행 모드 OFF");
+    } else if((e.ctrlKey || e.metaKey) && e.code === "KeyZ"){
+      e.preventDefault();
+      undo();
+    }
+  });
+  document.addEventListener("keyup", (e)=> keys.delete(e.code));
+
+  const CAM_MIN = 2.5, CAM_MAX = 12;
+  canvas.addEventListener("wheel", (e)=>{
+    if(!locked || viewMode !== "third") return;
+    camDistance = Math.max(CAM_MIN, Math.min(CAM_MAX, camDistance + e.deltaY * 0.01));
+  });
+
+  canvas.addEventListener("contextmenu", (e)=> e.preventDefault());
+
+  canvas.addEventListener("mousedown", (e)=>{
+    if(!locked) return;
+    if(e.button === 0) tryBreakBlock();
+    if(e.button === 2) tryPlaceBlock();
+  });
+
+  // ---------------------------------------------------------------
+  // Raycasting for block break / place
+  // ---------------------------------------------------------------
+  const raycaster = new THREE.Raycaster();
+  const REACH = 5; // how far in front of the character blocks can be broken/placed
+  const centerVec = new THREE.Vector2(0,0);
+
+  const highlightBox = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(1.01,1.01,1.01)),
+    new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 2 })
+  );
+  highlightBox.visible = false;
+  scene.add(highlightBox);
+
+  function raycastBlock(){
+    raycaster.far = camDistance + REACH + 2;
+    raycaster.setFromCamera(centerVec, camera);
+    const hits = raycaster.intersectObjects(blocksGroup.children, false);
+    if(!hits.length) return null;
+    const hit = hits[0];
+    if(hit.point.distanceTo(playerPos) > REACH + 1.5) return null; // out of the character's reach
+    return hit;
+  }
+
+  function tryBreakBlock(){
+    const hit = raycastBlock();
+    if(!hit) return;
+    const { x, y, z } = hit.object.userData;
+    const prevType = blockData.get(key(x,y,z));
+    if(removeBlock(x,y,z)) pushUndo({ type:"break", x, y, z, blockType: prevType });
+  }
+
+  function playerAABBIntersects(cellX, cellY, cellZ){
+    const r = 0.32;
+    const px = playerPos.x, pz = playerPos.z, py = playerPos.y;
+    const xs = [px-r, px+r], zs = [pz-r, pz+r];
+    const ys = [py+0.05, py+0.95, py+1.55];
+    for(const x of xs) for(const y of ys) for(const z of zs){
+      if(Math.floor(x)===cellX && Math.floor(y)===cellY && Math.floor(z)===cellZ) return true;
+    }
+    return false;
+  }
+
+  function tryPlaceBlock(){
+    const hit = raycastBlock();
+    if(!hit) return;
+    const n = hit.face.normal;
+    const { x, y, z } = hit.object.userData;
+    const nx = x + Math.round(n.x);
+    const ny = y + Math.round(n.y);
+    const nz = z + Math.round(n.z);
+    if(blockData.has(key(nx,ny,nz))) return;
+    if(playerAABBIntersects(nx,ny,nz)) return;
+    const typeId = BLOCK_TYPES[selectedIndex].id;
+    if(addBlock(nx, ny, nz, typeId, true)) pushUndo({ type:"place", x:nx, y:ny, z:nz });
+  }
+
+  // ---------------------------------------------------------------
+  // Undo (Ctrl+Z) — reverts the last block break or placement
+  // ---------------------------------------------------------------
+  const UNDO_LIMIT = 60;
+  const undoStack = [];
+  function pushUndo(action){
+    undoStack.push(action);
+    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+  }
+  function undo(){
+    const action = undoStack.pop();
+    if(!action) return;
+    if(action.type === "place"){
+      removeBlock(action.x, action.y, action.z);
+    } else if(action.type === "break"){
+      addBlock(action.x, action.y, action.z, action.blockType, true);
+    }
+    showToast("실행 취소");
+  }
+
+  // ---------------------------------------------------------------
+  // Physics / movement
+  // ---------------------------------------------------------------
+  const velocity = new THREE.Vector3();
+  const GRAVITY = -22;
+  const JUMP_SPEED = 8.2;
+  const WALK_SPEED = 5.2;
+  const SPRINT_SPEED = 8.4;
+  const FLY_SPEED = 7.5;
+  let onGround = false;
+
+  function collidesAt(pos){
+    const r = 0.32;
+    const xs = [pos.x-r, pos.x+r], zs = [pos.z-r, pos.z+r];
+    const ys = [pos.y+0.05, pos.y+0.95, pos.y+1.55];
+    for(const x of xs) for(const y of ys) for(const z of zs){
+      if(isSolid(x,y,z)) return true;
+    }
+    return false;
+  }
+
+  const tmpPos = new THREE.Vector3();
+
+  function lerpAngle(a, b, t){
+    let diff = ((b - a + Math.PI) % (Math.PI*2)) - Math.PI;
+    if(diff < -Math.PI) diff += Math.PI*2;
+    return a + diff * t;
+  }
+
+  function updatePlayer(dt){
+    const forward = (keys.has("KeyW")?1:0) - (keys.has("KeyS")?1:0);
+    const strafe  = (keys.has("KeyD")?1:0) - (keys.has("KeyA")?1:0);
+    const sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const speed = sprint ? SPRINT_SPEED : WALK_SPEED;
+    const isMoving = forward !== 0 || strafe !== 0;
+
+    let dx = 0, dz = 0;
+    if(isMoving){
+      const len = Math.hypot(forward, strafe) || 1;
+      const fN = forward/len, sN = strafe/len;
+      // movement is relative to the camera's yaw, like most 3rd-person games
+      dx = (Math.sin(cameraYaw) * -fN + Math.cos(cameraYaw) * sN) * speed * dt;
+      dz = (Math.cos(cameraYaw) * -fN - Math.sin(cameraYaw) * sN) * speed * dt;
+
+      const targetYaw = Math.atan2(dx, dz);
+      characterYaw = lerpAngle(characterYaw, targetYaw, Math.min(1, dt*12));
+    }
+
+    let dy;
+    if(flying){
+      const vAxis = (keys.has("Space")?1:0) - (keys.has("KeyC")?1:0);
+      const flySpeed = FLY_SPEED * (sprint ? 1.5 : 1);
+      velocity.y = 0;
+      dy = vAxis * flySpeed * dt;
+      onGround = false;
+    } else {
+      velocity.y += GRAVITY * dt;
+      if(onGround && keys.has("Space")){
+        velocity.y = JUMP_SPEED;
+        onGround = false;
+      }
+      dy = velocity.y * dt;
+    }
+
+    // X axis
+    tmpPos.copy(playerPos); tmpPos.x += dx;
+    if(!collidesAt(tmpPos)) playerPos.x = tmpPos.x;
+
+    // Z axis
+    tmpPos.copy(playerPos); tmpPos.z += dz;
+    if(!collidesAt(tmpPos)) playerPos.z = tmpPos.z;
+
+    // Y axis
+    tmpPos.copy(playerPos); tmpPos.y += dy;
+    if(!collidesAt(tmpPos)){
+      playerPos.y = tmpPos.y;
+      onGround = false;
+    } else {
+      if(dy < 0) onGround = true;
+      velocity.y = 0;
+    }
+
+    // Fallback: don't fall forever through the void
+    if(playerPos.y < -30){
+      playerPos.set(0.5, 6, 0.5);
+      velocity.set(0,0,0);
+    }
+
+    // Sync visible character mesh
+    characterGroup.position.copy(playerPos);
+    characterGroup.rotation.y = characterYaw;
+
+    // Animate character: imported model (AnimationMixer) or default blocky avatar (procedural)
+    if(usingCustomModel){
+      if(mixer){
+        if(isMoving) playAction(walkAction); else playAction(idleAction);
+        mixer.update(dt);
+      }
+    } else if(defaultParts){
+      const targetSpeed = isMoving ? (sprint ? 10 : 7) : 0;
+      walkPhase += dt * targetSpeed;
+      const amp = isMoving ? 0.55 : 0;
+      const angle = Math.sin(walkPhase) * amp;
+      defaultParts.leftLeg.rotation.x = angle;
+      defaultParts.rightLeg.rotation.x = -angle;
+      defaultParts.leftArm.rotation.x = -angle;
+      defaultParts.rightArm.rotation.x = angle;
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Camera: 1st-person (attached to eyes) or 3rd-person (orbiting)
+  // ---------------------------------------------------------------
+  const camTarget = new THREE.Vector3();
+  const camDir = new THREE.Vector3();
+  const camDesired = new THREE.Vector3();
+
+  function setViewMode(mode){
+    viewMode = mode;
+    characterGroup.visible = (mode === "third");
+    modeToggleBtn.textContent = mode === "third" ? "1인칭으로 전환 (V)" : "3인칭으로 전환 (V)";
+  }
+
+  function updateCamera(){
+    if(viewMode === "first"){
+      camera.position.set(playerPos.x, playerPos.y + FP_EYE_HEIGHT, playerPos.z);
+      camera.rotation.order = "YXZ";
+      camera.rotation.set(pitch, cameraYaw, 0);
+      camera.updateMatrixWorld();
+      return;
+    }
+
+    // orbitPitch is the mirror of the look-up-positive "pitch" convention:
+    // looking up (pitch>0) should lower the orbiting camera below the target.
+    const orbitPitch = -pitch;
+    camTarget.set(playerPos.x, playerPos.y + EYE_HEIGHT, playerPos.z);
+
+    camDir.set(
+      Math.sin(cameraYaw) * Math.cos(orbitPitch),
+      Math.sin(orbitPitch),
+      Math.cos(cameraYaw) * Math.cos(orbitPitch)
+    );
+
+    // pull the camera closer if terrain is blocking the view, so it never clips through blocks
+    raycaster.set(camTarget, camDir);
+    raycaster.far = camDistance;
+    const hits = raycaster.intersectObjects(blocksGroup.children, false);
+    const finalDist = hits.length ? Math.max(1.2, hits[0].distance - 0.3) : camDistance;
+
+    camDesired.copy(camDir).multiplyScalar(finalDist).add(camTarget);
+    camera.position.copy(camDesired);
+    camera.lookAt(camTarget);
+    camera.updateMatrixWorld();
+  }
+
+  // ---------------------------------------------------------------
+  // HUD updates
+  // ---------------------------------------------------------------
+  const coordEl = document.getElementById("coord-xyz");
+  function updateHUD(){
+    const p = playerPos;
+    coordEl.textContent = `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`;
+  }
+
+  // ---------------------------------------------------------------
+  // Main loop
+  // ---------------------------------------------------------------
+  const clock = new THREE.Clock();
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    updateDayNight(dt);
+
+    if(locked){
+      updatePlayer(dt);
+      updateCamera();
+      const hit = raycastBlock();
+      if(hit){
+        const { x, y, z } = hit.object.userData;
+        highlightBox.position.set(x+0.5, y+0.5, z+0.5);
+        highlightBox.visible = true;
+      } else {
+        highlightBox.visible = false;
+      }
+      updateHUD();
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  selectSlot(0);
+  setViewMode("third");
+  updateCamera();
+  animate();
+})();
+</script>
+</body>
+</html>
